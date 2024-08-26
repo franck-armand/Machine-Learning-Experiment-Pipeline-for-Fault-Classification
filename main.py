@@ -199,22 +199,65 @@ def visualize_results(results, X_test, y_test, folder_name, log_dir):
 
     fig, axes = plt.subplots(1, 4, figsize=(24, 6))
 
+    # Overall Accuracy Comparison
     bars = axes[0].bar(models, accuracies, color=['blue', 'orange', 'green', 'purple', 'red', 'cyan', 'magenta', 'yellow'])
     axes[0].set_title('Overall Accuracy Comparison', pad=20)
     axes[0].set_ylim(0, 1)
     axes[0].set_ylabel('Accuracy')
-    axes[0].set_xticklabels(models, rotation = 45)
+    axes[0].set_xticklabels(models, rotation=45)
     add_value_labels(axes[0])
 
     fault_types = list(range(7))
     fault_labels = [map_fault_type(f) for f in fault_types]
-
-    # Calculate accuracy for each fault type using the RandomForest as an example
-    rf_accuracies_by_type = confusion_matrix(y_test, RandomForestClassifier().fit(X_test, y_test).predict(X_test), normalize='true').diagonal()
-
+    
+    # Calculate fault type accuracies for each model
     bar_width = 0.15
     index = np.arange(len(fault_types))
-    bars_rf = axes[1].bar(index, rf_accuracies_by_type, bar_width, label='RF', color='blue')
+
+    for i, (model_name, _) in enumerate(results):
+        if model_name == 'Random Forest':
+            model = RandomForestClassifier().fit(X_test, y_test)
+        elif model_name == 'SVM':
+            model = SVC().fit(X_test, y_test)
+        elif model_name == 'GaussianNB':
+            model = GaussianNB().fit(X_test, y_test)
+        elif model_name == 'CNN':
+            # Add CNN-specific preparation if needed
+            continue
+        elif model_name == 'BN-RFEMI (Stacking)':
+            model = StackingClassifier(
+                estimators=[
+                    ('rf', RandomForestClassifier(n_estimators=200, random_state=42)),
+                    ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
+                    ('svc', SVC(kernel='linear', probability=True, random_state=42))
+                ],
+                final_estimator=LogisticRegression(),
+                cv=5
+            ).fit(X_test, y_test)
+        elif model_name == 'Voting Classifier':
+            model = VotingClassifier(
+                estimators=[
+                    ('rf', RandomForestClassifier(n_estimators=200, random_state=42)),
+                    ('gb', GradientBoostingClassifier(n_estimators=100, random_state=42)),
+                    ('svc', SVC(kernel='linear', probability=True, random_state=42))
+                ],
+                voting='soft'
+            ).fit(X_test, y_test)
+        elif model_name == 'Bagging Classifier':
+            model = BaggingClassifier(
+                base_estimator=RandomForestClassifier(random_state=42),
+                n_estimators=10, random_state=42
+            ).fit(X_test, y_test)
+        elif model_name == 'Gradient Boosting':
+            model = GradientBoostingClassifier(n_estimators=100, random_state=42).fit(X_test, y_test)
+        else:
+            continue
+
+        # Compute fault type accuracies
+        model_fault_accuracies = confusion_matrix(y_test, model.predict(X_test), normalize='true').diagonal()
+
+        # Plot the fault type accuracies
+        axes[1].bar(index + i * bar_width, model_fault_accuracies, bar_width, label=model_name)
 
     axes[1].set_title('Accuracy by Fault Type', pad=20)
     axes[1].set_xticks(index + 2 * bar_width)
@@ -222,11 +265,13 @@ def visualize_results(results, X_test, y_test, folder_name, log_dir):
     axes[1].set_ylim(0, 1)
     axes[1].legend(loc='upper left', bbox_to_anchor=(1, 1))
 
-    # Create a table beside the graph with accuracy percentages for RF as an example
+    # Create a table beside the graph with accuracy percentages
     table_data = {
         'Fault Type': fault_labels,
-        'RF Accuracy': rf_accuracies_by_type * 100,
     }
+    for i, (model_name, _) in enumerate(results):
+        model_fault_accuracies = confusion_matrix(y_test, model.predict(X_test), normalize='true').diagonal()
+        table_data[f'{model_name} Accuracy'] = model_fault_accuracies * 100
 
     table_df = pd.DataFrame(table_data)
     axes[2].axis('off')
