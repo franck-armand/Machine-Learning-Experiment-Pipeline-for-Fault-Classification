@@ -1,0 +1,9 @@
+Model,Accuracy
+Random Forest,0.9990
+SVM,0.9835
+GaussianNB,0.7625
+CNN,0.9904
+BN-RFEMI (Stacking),0.9990
+Voting Classifier,0.9983
+Bagging Classifier,0.9989
+Gradient Boosting,0.9986
